@@ -31842,19 +31842,25 @@ var exports = __webpack_exports__;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __nccwpck_require__(7484);
 const github = __nccwpck_require__(3228);
+const fs = __nccwpck_require__(9896);
+const path = __nccwpck_require__(6928);
 const WINDOW_SIZE = 20;
 async function run() {
     const ctx = github.context;
     const workflow = ctx.workflow;
     const branch = ctx.ref.replace("refs/heads/", "");
-    const cacheKey = `flaky-${workflow}-${branch}`;
+    const workspace = process.env.GITHUB_WORKSPACE;
+    if (!workspace)
+        return;
+    const cacheDir = path.join(workspace, ".flaky-cache");
+    const cacheFile = path.join(cacheDir, "history.json");
     let history = [];
-    try {
-        const state = core.getState(cacheKey);
-        if (state)
-            history = JSON.parse(state);
+    if (fs.existsSync(cacheFile)) {
+        try {
+            history = JSON.parse(fs.readFileSync(cacheFile, "utf-8"));
+        }
+        catch { }
     }
-    catch { }
     const conclusion = ctx.payload.workflow_run?.conclusion ??
         ctx.payload.conclusion;
     if (!conclusion)
@@ -31862,9 +31868,12 @@ async function run() {
     history.push({ conclusion });
     if (history.length > WINDOW_SIZE)
         history.shift();
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(cacheFile, JSON.stringify(history));
     const results = new Set(history.map(r => r.conclusion));
     const flaky = results.has("success") && results.has("failure");
-    await core.saveState(cacheKey, JSON.stringify(history));
+    core.info(`History length: ${history.length}`);
+    core.info(`History: ${JSON.stringify(history)}`);
     if (flaky) {
         core.warning(`Flaky detected based on last ${WINDOW_SIZE} runs`);
         core.summary
