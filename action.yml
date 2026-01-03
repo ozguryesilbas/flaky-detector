@@ -3,3 +3,4 @@ description: Detects flaky CI workflows by tracking inconsistent success and fai
 runs:
   using: node20
   main: dist/index.js
+  post: dist/index.js

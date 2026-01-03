@@ -1,5 +1,4 @@
 import * as core from "@actions/core"
-import * as github from "@actions/github"
 import * as fs from "fs"
 import * as path from "path"
 
@@ -10,11 +9,12 @@ type Run = {
 }
 
 async function run() {
-    const workspace = process.env.GITHUB_WORKSPACE
-    if (!workspace) return
+    if (process.env.STATE_isPost !== "true") return
 
-    const jobStatus = process.env.GITHUB_JOB_STATUS
-    if (!jobStatus) return
+    const workspace = process.env.GITHUB_WORKSPACE
+    const status = process.env.GITHUB_JOB_STATUS
+
+    if (!workspace || !status) return
 
     const cacheDir = path.join(workspace, ".flaky-cache")
     const cacheFile = path.join(cacheDir, "history.json")
@@ -27,17 +27,17 @@ async function run() {
         } catch {}
     }
 
-    history.push({ conclusion: jobStatus })
+    history.push({ conclusion: status })
     if (history.length > WINDOW_SIZE) history.shift()
 
     fs.mkdirSync(cacheDir, { recursive: true })
     fs.writeFileSync(cacheFile, JSON.stringify(history))
 
-    core.info(`History length: ${history.length}`)
-    core.info(`History: ${JSON.stringify(history)}`)
-
     const results = new Set(history.map(r => r.conclusion))
     const flaky = results.has("success") && results.has("failure")
+
+    core.info(`History length: ${history.length}`)
+    core.info(`History: ${JSON.stringify(history)}`)
 
     if (flaky) {
         core.warning(`Flaky detected based on last ${WINDOW_SIZE} runs`)
