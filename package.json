@@ -1,5 +1,5 @@
 {
-  "name": "flaky-detector-action",
+  "name": "flaky-detector",
   "version": "1.0.0",
   "private": true,
   "scripts": {

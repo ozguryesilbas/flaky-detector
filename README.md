@@ -19,4 +19,4 @@ This action automatically flags unstable behavior without configuration.
 ## Usage
 
 ```yaml
-- uses: YOUR_GITHUB_ORG/flaky-detector-action@v1
+- uses: ozguryesilbas/flaky-detector@v1
