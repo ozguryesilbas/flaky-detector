@@ -10,12 +10,11 @@ type Run = {
 }
 
 async function run() {
-    const ctx = github.context
-    const workflow = ctx.workflow
-    const branch = ctx.ref.replace("refs/heads/", "")
-
     const workspace = process.env.GITHUB_WORKSPACE
     if (!workspace) return
+
+    const jobStatus = process.env.GITHUB_JOB_STATUS
+    if (!jobStatus) return
 
     const cacheDir = path.join(workspace, ".flaky-cache")
     const cacheFile = path.join(cacheDir, "history.json")
@@ -28,23 +27,17 @@ async function run() {
         } catch {}
     }
 
-    const conclusion =
-        ctx.payload.workflow_run?.conclusion ??
-            ctx.payload.conclusion
-
-    if (!conclusion) return
-
-    history.push({ conclusion })
+    history.push({ conclusion: jobStatus })
     if (history.length > WINDOW_SIZE) history.shift()
 
     fs.mkdirSync(cacheDir, { recursive: true })
     fs.writeFileSync(cacheFile, JSON.stringify(history))
 
-    const results = new Set(history.map(r => r.conclusion))
-    const flaky = results.has("success") && results.has("failure")
-
     core.info(`History length: ${history.length}`)
     core.info(`History: ${JSON.stringify(history)}`)
+
+    const results = new Set(history.map(r => r.conclusion))
+    const flaky = results.has("success") && results.has("failure")
 
     if (flaky) {
         core.warning(`Flaky detected based on last ${WINDOW_SIZE} runs`)
