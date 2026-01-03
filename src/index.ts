@@ -1,55 +1,51 @@
-import express from "express"
-import { gh, listRunsForSha, createCheck, commentPR } from "./github.js"
+import * as core from "@actions/core"
+import * as github from "@actions/github"
 
-const app = express()
-app.use(express.json())
+const WINDOW_SIZE = 20
 
-const port = Number(process.env.PORT || 3000)
-const token = process.env.GITHUB_TOKEN || ""
-const lookback = Number(process.env.LOOKBACK || 10)
-
-function isFlaky(conclusions: (string | null)[]) {
-    const set = new Set(conclusions.filter(Boolean) as string[])
-    return set.has("success") && (set.has("failure") || set.has("cancelled") || set.has("timed_out") || set.has("action_required"))
+type Run = {
+    sha: string
+    conclusion: string
 }
 
-app.post("/webhook", async (req, res) => {
-    const event = String(req.headers["x-github-event"] || "")
-    if (event !== "workflow_run") return res.sendStatus(200)
-    if (!token) return res.sendStatus(500)
+async function run() {
+    const token = process.env.GITHUB_TOKEN as string
+    const octokit = github.getOctokit(token)
+    const ctx = github.context
 
-    const action = req.body.action
-    if (action !== "completed") return res.sendStatus(200)
+    const workflow = ctx.workflow
+    const branch = ctx.ref.replace("refs/heads/", "")
+    const cacheKey = `flaky-${workflow}-${branch}`
 
-    const wr = req.body.workflow_run
-    const prs = (wr.pull_requests || []) as Array<{ number: number }>
-    if (!prs.length) return res.sendStatus(200)
+    let history: Run[] = []
 
-    const owner = wr.repository.owner.login as string
-    const repo = wr.repository.name as string
-    const sha = wr.head_sha as string
-    const workflowId = Number(wr.workflow_id)
+    try {
+        const state = core.getState(cacheKey)
+        if (state) history = JSON.parse(state)
+    } catch {}
 
-    const o = gh(token)
-    const runs = await listRunsForSha(o, owner, repo, workflowId, sha, lookback)
-    const conclusions = runs.map(r => r.conclusion as string | null)
+    const conclusion = ctx.payload.workflow_run?.conclusion
+    const sha = ctx.sha
 
-    if (isFlaky(conclusions)) {
-        const prNumber = prs[0].number
-        const summary = `Flaky signal: same commit has mixed outcomes in last ${runs.length} runs`
-        await createCheck(o, owner, repo, sha, false, summary)
-        await commentPR(
-            o,
-            owner,
-            repo,
-            prNumber,
-            `⚠️ Flaky detected\n\n${summary}\n\nCheck timing, async usage, shared state, and external dependencies.`
-        )
+    if (!conclusion) return
+
+    history.push({ sha, conclusion })
+    if (history.length > WINDOW_SIZE) history.shift()
+
+    const results = new Set(history.map(r => r.conclusion))
+    const flaky = results.has("success") && results.has("failure")
+
+    await core.saveState(cacheKey, JSON.stringify(history))
+
+    if (flaky) {
+        core.warning(`Flaky detected based on last ${WINDOW_SIZE} runs`)
+        core.summary
+            .addHeading("⚠️ Flaky CI detected")
+            .addRaw(`Mixed success/failure detected in the last ${WINDOW_SIZE} runs.`)
+            .write()
     } else {
-        await createCheck(o, owner, repo, sha, true, `No flakiness detected in last ${runs.length} runs`)
+        core.info("No flakiness detected")
     }
+}
 
-    res.sendStatus(200)
-})
-
-app.listen(port)
+run()

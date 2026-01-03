@@ -1,8 +1,8 @@
 node_modules
-dist
+npm-debug.log
 .env
 .env.*
-npm-debug.log
 .DS_Store
 .idea
 .vscode
+*.iml
