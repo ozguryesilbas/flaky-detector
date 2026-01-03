@@ -31844,8 +31844,6 @@ const core = __nccwpck_require__(7484);
 const github = __nccwpck_require__(3228);
 const WINDOW_SIZE = 20;
 async function run() {
-    const token = process.env.GITHUB_TOKEN;
-    const octokit = github.getOctokit(token);
     const ctx = github.context;
     const workflow = ctx.workflow;
     const branch = ctx.ref.replace("refs/heads/", "");
@@ -31857,11 +31855,11 @@ async function run() {
             history = JSON.parse(state);
     }
     catch { }
-    const conclusion = ctx.payload.workflow_run?.conclusion;
-    const sha = ctx.sha;
+    const conclusion = ctx.payload.workflow_run?.conclusion ??
+        ctx.payload.conclusion;
     if (!conclusion)
         return;
-    history.push({ sha, conclusion });
+    history.push({ conclusion });
     if (history.length > WINDOW_SIZE)
         history.shift();
     const results = new Set(history.map(r => r.conclusion));
@@ -31871,11 +31869,8 @@ async function run() {
         core.warning(`Flaky detected based on last ${WINDOW_SIZE} runs`);
         core.summary
             .addHeading("⚠️ Flaky CI detected")
-            .addRaw(`Mixed success/failure detected in the last ${WINDOW_SIZE} runs.`)
+            .addRaw(`Mixed success and failure detected in the last ${WINDOW_SIZE} runs.`)
             .write();
-    }
-    else {
-        core.info("No flakiness detected");
     }
 }
 run();
