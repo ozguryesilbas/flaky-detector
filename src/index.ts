@@ -1,45 +1,35 @@
 import * as core from "@actions/core"
-import * as fs from "fs"
-import * as path from "path"
+import * as github from "@actions/github"
 
 const WINDOW_SIZE = 20
 
-type Run = {
-    conclusion: string
-}
-
 async function run() {
-    if (process.env.STATE_isPost !== "true") return
+    const ctx = github.context
 
-    const workspace = process.env.GITHUB_WORKSPACE
-    const status = process.env.GITHUB_JOB_STATUS
+    const runs = ctx.payload.workflow_run?.pull_requests
+        ? []
+        : ctx.payload.workflow_run
 
-    if (!workspace || !status) return
+    const history = ctx.payload.workflow_run?.head_commit
+        ? []
+        : []
 
-    const cacheDir = path.join(workspace, ".flaky-cache")
-    const cacheFile = path.join(cacheDir, "history.json")
+    const recent = ctx.payload.workflow_run?.conclusion
+    if (!recent) return
 
-    let history: Run[] = []
+    const conclusions = ctx.payload.workflow_run?.repository
+        ? []
+        : []
 
-    if (fs.existsSync(cacheFile)) {
-        try {
-            history = JSON.parse(fs.readFileSync(cacheFile, "utf-8"))
-        } catch {}
+    const seen = new Set<string>()
+
+    const runsData = ctx.payload.workflow_run?.repository?.workflow_runs || []
+
+    for (const r of runsData.slice(0, WINDOW_SIZE)) {
+        if (r.conclusion) seen.add(r.conclusion)
     }
 
-    history.push({ conclusion: status })
-    if (history.length > WINDOW_SIZE) history.shift()
-
-    fs.mkdirSync(cacheDir, { recursive: true })
-    fs.writeFileSync(cacheFile, JSON.stringify(history))
-
-    const results = new Set(history.map(r => r.conclusion))
-    const flaky = results.has("success") && results.has("failure")
-
-    core.info(`History length: ${history.length}`)
-    core.info(`History: ${JSON.stringify(history)}`)
-
-    if (flaky) {
+    if (seen.has("success") && seen.has("failure")) {
         core.warning(`Flaky detected based on last ${WINDOW_SIZE} runs`)
         core.summary
             .addHeading("⚠️ Flaky CI detected")

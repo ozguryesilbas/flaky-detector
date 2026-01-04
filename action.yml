@@ -1,6 +1,5 @@
 name: Flaky Detector
-description: Detects flaky CI workflows by tracking inconsistent success and failure results across recent runs.
+description: Detects flaky CI workflows by analyzing recent completed runs
 runs:
   using: node20
   main: dist/index.js
-  post: dist/index.js
