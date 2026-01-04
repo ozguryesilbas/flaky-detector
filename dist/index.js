@@ -29922,6 +29922,88 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 9407:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const core = __importStar(__nccwpck_require__(7484));
+const github = __importStar(__nccwpck_require__(3228));
+function toInt(v, fallback) {
+    const n = Number.parseInt(v, 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+async function run() {
+    const token = core.getInput("token", { required: true });
+    const window = toInt(core.getInput("window") || "20", 20);
+    const ctx = github.context;
+    const { owner, repo } = ctx.repo;
+    const wr = ctx.payload.workflow_run;
+    const workflowId = wr?.workflow_id;
+    if (!workflowId) {
+        core.setFailed("workflow_run.workflow_id not found. This action must run on workflow_run.");
+        return;
+    }
+    const octokit = github.getOctokit(token);
+    const { data } = await octokit.rest.actions.listWorkflowRuns({
+        owner,
+        repo,
+        workflow_id: workflowId,
+        per_page: Math.min(window, 100)
+    });
+    const conclusions = (data.workflow_runs || []).map(r => r.conclusion).filter(c => c !== null);
+    const hasSuccess = conclusions.includes("success");
+    const hasFailure = conclusions.includes("failure");
+    const flaky = hasSuccess && hasFailure;
+    core.setOutput("flaky", String(flaky));
+    core.summary
+        .addHeading(flaky ? "⚠️ Flaky detected" : "✅ Not flaky")
+        .addRaw(`Window: ${Math.min(window, conclusions.length)} runs`)
+        .addBreak()
+        .addRaw(`Seen: ${Array.from(new Set(conclusions)).join(", ") || "none"}`)
+        .write();
+    if (flaky)
+        core.warning(`Flaky detected based on last ${Math.min(window, conclusions.length)} runs`);
+}
+run().catch(e => core.setFailed(e instanceof Error ? e.message : String(e)));
+
+
+/***/ }),
+
 /***/ 2613:
 /***/ ((module) => {
 
@@ -31833,48 +31915,12 @@ module.exports = parseParams
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
-var __webpack_exports__ = {};
-// This entry need to be wrapped in an IIFE because it need to be in strict mode.
-(() => {
-"use strict";
-var exports = __webpack_exports__;
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const core = __nccwpck_require__(7484);
-const github = __nccwpck_require__(3228);
-const WINDOW_SIZE = 20;
-async function run() {
-    const ctx = github.context;
-    const runs = ctx.payload.workflow_run?.pull_requests
-        ? []
-        : ctx.payload.workflow_run;
-    const history = ctx.payload.workflow_run?.head_commit
-        ? []
-        : [];
-    const recent = ctx.payload.workflow_run?.conclusion;
-    if (!recent)
-        return;
-    const conclusions = ctx.payload.workflow_run?.repository
-        ? []
-        : [];
-    const seen = new Set();
-    const runsData = ctx.payload.workflow_run?.repository?.workflow_runs || [];
-    for (const r of runsData.slice(0, WINDOW_SIZE)) {
-        if (r.conclusion)
-            seen.add(r.conclusion);
-    }
-    if (seen.has("success") && seen.has("failure")) {
-        core.warning(`Flaky detected based on last ${WINDOW_SIZE} runs`);
-        core.summary
-            .addHeading("⚠️ Flaky CI detected")
-            .addRaw(`Mixed success and failure detected in the last ${WINDOW_SIZE} runs.`)
-            .write();
-    }
-}
-run();
-
-})();
-
-module.exports = __webpack_exports__;
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __nccwpck_require__(9407);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
 /******/ })()
 ;

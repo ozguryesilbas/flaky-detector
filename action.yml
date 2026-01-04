@@ -1,5 +1,16 @@
 name: Flaky Detector
-description: Detects flaky CI workflows by analyzing recent completed runs
+description: Detect flaky workflows by checking recent workflow runs.
+inputs:
+  token:
+    description: GitHub token
+    required: true
+  window:
+    description: Number of recent runs to analyze
+    required: false
+    default: "20"
+outputs:
+  flaky:
+    description: Whether flaky behavior is detected
 runs:
   using: node20
   main: dist/index.js
